@@ -10,6 +10,12 @@ mkdir -p reports
 
 adb logcat -c || true
 
+# Shared CI runners are slow, and a slow home screen makes Android show
+# "<app> isn't responding" over everything, which hides the app under test.
+# Ask Android not to show those dialogs, and close any that is already open.
+adb shell settings put global hide_error_dialogs 1 || true
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+
 appium --address 127.0.0.1 --port "$APPIUM_PORT" --log reports/appium.log --log-timestamp &
 APPIUM_PID=$!
 
