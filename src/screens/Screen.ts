@@ -36,19 +36,26 @@ export abstract class Screen {
     }
   }
 
-  /** Scrolls the screen's list down by part of its height. */
+  /**
+   * Swipes up over the screen's scrollable area to bring lower content into
+   * view. A finger swipe reaches lists nested inside another scrolling view,
+   * which a "scroll this view" command does not.
+   */
   protected async scrollDown(percent = 0.4): Promise<void> {
-    const list = $(byScrollable());
-    const { x, y } = await list.getLocation();
-    const { width, height } = await list.getSize();
-    await driver.execute('mobile: scrollGesture', {
-      left: x,
-      top: y,
-      width,
-      height,
-      direction: 'down',
-      percent,
-    });
+    const area = $(byScrollable());
+    const { x, y } = await area.getLocation();
+    const { width, height } = await area.getSize();
+    const centreX = Math.round(x + width / 2);
+    const startY = Math.round(y + height * 0.75);
+    const endY = Math.round(startY - height * percent);
+    await driver
+      .action('pointer', { parameters: { pointerType: 'touch' } })
+      .move({ x: centreX, y: startY })
+      .down()
+      .pause(100)
+      .move({ duration: 600, x: centreX, y: endY })
+      .up()
+      .perform();
   }
 
   /** The keyboard can cover buttons near the bottom of a form. */
