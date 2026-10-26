@@ -102,18 +102,19 @@ export function siblingOf(anchor: Anchor, siblingId: string): string {
 
 /**
  * The list row around the anchor, e.g. the cart row of a product: the
- * outermost ancestor that holds exactly one `rowKeyId` element. Look up the
+ * anchor's ancestor that is a direct child of the list `listId`. Look up the
  * row's other fields from there.
  *
- * Searching instead for the nearest ancestor that holds some row field (say a
- * "+" button) goes wrong when that field of this row is still below the fold:
- * the nearest match is then the whole list, and the lookups return the first
- * row's values.
+ * Guessing the row from its contents goes wrong once the list scrolls. The
+ * nearest ancestor holding a "+" button is the whole list while this row's
+ * button is below the fold; the outermost ancestor holding one title is the
+ * whole screen once the row above has scrolled its title away, and both then
+ * return the other row's values.
  */
-export function rowOf(anchor: Anchor, rowKeyId: string): string {
+export function rowOf(anchor: Anchor, listId: string): string {
   androidOnly('rowOf');
-  const key = xpathString(fullResourceId(rowKeyId));
-  return `${anchorXPath(anchor)}/ancestor::*[count(.//*[@resource-id=${key}]) = 1][last()]`;
+  const list = xpathString(fullResourceId(listId));
+  return `${anchorXPath(anchor)}/ancestor::*[parent::*[@resource-id=${list}]][1]`;
 }
 
 /** The screen's scrollable container, e.g. a list. */

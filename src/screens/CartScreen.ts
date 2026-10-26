@@ -32,7 +32,7 @@ class CartScreen extends Screen {
   }
 
   private row(productName: string) {
-    return $(rowOf({ id: 'titleTV', text: productName }, 'titleTV'));
+    return $(rowOf({ id: 'titleTV', text: productName }, 'productRV'));
   }
 
   /**
