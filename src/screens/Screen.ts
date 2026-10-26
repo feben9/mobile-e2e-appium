@@ -1,6 +1,6 @@
 import { $, driver } from '@wdio/globals';
 import type { ChainablePromiseElement } from 'webdriverio';
-import { locate, scrollIntoView, type Target } from '../support/selectors';
+import { byScrollable, locate, scrollIntoView, type Target } from '../support/selectors';
 
 /**
  * Base for screen objects. Each screen object works only the surface it is
@@ -34,6 +34,21 @@ export abstract class Screen {
     } else {
       await field.setValue(value);
     }
+  }
+
+  /** Scrolls the screen's list down by part of its height. */
+  protected async scrollDown(percent = 0.4): Promise<void> {
+    const list = $(byScrollable());
+    const { x, y } = await list.getLocation();
+    const { width, height } = await list.getSize();
+    await driver.execute('mobile: scrollGesture', {
+      left: x,
+      top: y,
+      width,
+      height,
+      direction: 'down',
+      percent,
+    });
   }
 
   /** The keyboard can cover buttons near the bottom of a form. */

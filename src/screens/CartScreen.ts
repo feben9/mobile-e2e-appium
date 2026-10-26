@@ -1,6 +1,6 @@
 import { $, $$, browser } from '@wdio/globals';
 import { toCents, type PricedLine } from '../support/money';
-import { byAccessibilityId, byResourceId, byText, containerOf } from '../support/selectors';
+import { byAccessibilityId, byResourceId, byText, rowOf } from '../support/selectors';
 import { Screen } from './Screen';
 
 export interface CartLine extends PricedLine {
@@ -32,12 +32,27 @@ class CartScreen extends Screen {
   }
 
   private row(productName: string) {
-    return $(containerOf({ id: 'titleTV', text: productName }, 'plusIV'));
+    return $(rowOf({ id: 'titleTV', text: productName }, 'titleTV'));
+  }
+
+  /**
+   * Brings the whole row on screen. A row whose lower half is below the fold
+   * has no quantity in the UI tree yet, so reading it would fail.
+   */
+  private async revealRow(productName: string) {
+    await this.reveal({ text: productName });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await this.row(productName).$(byResourceId('noTV')).isDisplayed()) {
+        return this.row(productName);
+      }
+      await this.scrollDown();
+    }
+    throw new Error(`The cart row for "${productName}" never came fully on screen`);
   }
 
   /** One row as shown: name, unit price and quantity. */
   async line(productName: string): Promise<CartLine> {
-    const row = this.row(productName);
+    const row = await this.revealRow(productName);
     return {
       name: productName,
       unitPriceCents: toCents(await row.$(byResourceId('priceTV')).getText()),
@@ -55,7 +70,8 @@ class CartScreen extends Screen {
   }
 
   async increaseQuantity(productName: string): Promise<void> {
-    await this.row(productName).$(byAccessibilityId('Increase item quantity')).click();
+    const row = await this.revealRow(productName);
+    await row.$(byAccessibilityId('Increase item quantity')).click();
   }
 
   async totalInCents(): Promise<number> {
