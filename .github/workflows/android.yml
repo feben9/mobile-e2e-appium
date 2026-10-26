@@ -1,0 +1,122 @@
+name: android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      known_defects:
+        description: Run only the known-defect specs (expected to fail)
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 22
+  APPIUM_VERSION: 2.19.0
+  UIAUTOMATOR2_VERSION: 4.2.9 # last driver line that supports Appium 2
+  API_LEVEL: 34
+  AVD_PROFILE: pixel_6
+
+jobs:
+  static-checks:
+    name: Lint and typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+  e2e:
+    name: E2E on Android emulator (API 34)
+    needs: static-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APPIUM_PORT: 4723
+      KNOWN_DEFECTS: ${{ inputs.known_defects && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch the app under test
+        run: bash scripts/fetch-app.sh
+
+      - name: Install Appium and the UiAutomator2 driver
+        run: |
+          npm install --global "appium@${APPIUM_VERSION}"
+          appium driver install "uiautomator2@${UIAUTOMATOR2_VERSION}"
+          appium driver list --installed
+
+      - name: Restore the emulator snapshot
+        id: avd-cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ env.API_LEVEL }}-google_apis-x86_64-${{ env.AVD_PROFILE }}
+
+      - name: Create the emulator snapshot
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          profile: ${{ env.AVD_PROFILE }}
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Created the emulator snapshot."
+
+      - name: Run the tests on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          profile: ${{ env.AVD_PROFILE }}
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash scripts/ci-run-e2e.sh
+
+      - name: Upload screenshots, logs and Allure results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-reports-${{ github.run_number }}
+          path: |
+            reports/
+            allure-results/
+          if-no-files-found: ignore
+          retention-days: 14

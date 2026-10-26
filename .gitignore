@@ -1,0 +1,15 @@
+node_modules/
+
+# The app under test is downloaded by scripts/fetch-app.sh, never committed.
+apps/*.apk
+apps/*.part
+
+# Test output
+allure-results/
+allure-report/
+reports/
+
+# Local tooling
+.DS_Store
+*.log
+.env
